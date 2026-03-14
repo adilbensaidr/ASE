@@ -9,6 +9,7 @@
 
 require('dotenv').config();
 const path = require('path');
+const fs = require('fs');
 const mongoose = require('mongoose');
 const Player      = require('../src/models/Player');
 const PlayerDetail = require('../src/models/PlayerDetail');
@@ -17,9 +18,24 @@ const User        = require('../src/models/User');
 
 // Rutas a los JSONs del workspace (en la raíz del proyecto)
 const DATA_DIR = path.join(__dirname, '..', '..');
-const playersData     = require(path.join(DATA_DIR, 'players_Data_production.json'));
-const scoutReportData = require(path.join(DATA_DIR, 'scout_report.json'));
-const detailedStatsData = require(path.join(DATA_DIR, 'player_statistics_detailed.json'));
+
+function resolveDataFile(fileName) {
+  const candidates = [
+    path.join(DATA_DIR, fileName),
+    path.join(DATA_DIR, 'documentation', fileName)
+  ];
+
+  const found = candidates.find((filePath) => fs.existsSync(filePath));
+  if (!found) {
+    throw new Error(`No se encontró el archivo ${fileName}. Rutas probadas: ${candidates.join(', ')}`);
+  }
+
+  return found;
+}
+
+const playersData = require(resolveDataFile('players_Data_production.json'));
+const scoutReportData = require(resolveDataFile('scout_report.json'));
+const detailedStatsData = require(resolveDataFile('player_statistics_detailed.json'));
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -316,54 +332,78 @@ async function seed() {
 
   // 4. Insertar reportes de scouting
   // Los IDs del JSON original son numéricos y no coinciden 1:1 con los _id de Mongo,
-  // así que intentamos hacer match por nombre de jugador.
-  const playersByName = {};
-  insertedPlayers.forEach(p => { playersByName[p.name.toLowerCase()] = p._id; });
+  // así que hacemos match robusto por nombre. Si no existe jugador, lo creamos mínimo.
+  const allPlayers = await Player.find().select('_id name').lean();
+  const playersByName = new Map(
+    allPlayers.map((player) => [normalizeName(player.name), player._id])
+  );
 
-  const reportDocs = scoutReportData.scoutingReports
-    .map(r => {
-      // Intentar match exacto y luego parcial
-      const key = r.playerName?.toLowerCase();
-      const playerId =
-        playersByName[key] ||
-        Object.entries(playersByName).find(([k]) => k.includes(key?.split(' ')[1] ?? ''))?.[1];
+  const reportDocs = [];
 
-      if (!playerId) {
-        console.warn(`⚠️  No se encontró jugador para el reporte: "${r.playerName}" — omitido`);
-        return null;
+  for (const report of scoutReportData.scoutingReports || []) {
+    const normalizedPlayerName = normalizeName(report.playerName);
+    let playerId = playersByName.get(normalizedPlayerName);
+
+    if (!playerId) {
+      const tokens = normalizedPlayerName.split(' ').filter(Boolean);
+      if (tokens.length) {
+        const partialMatch = Array.from(playersByName.entries()).find(([name]) =>
+          tokens.some((token) => token.length > 2 && name.includes(token))
+        );
+        playerId = partialMatch?.[1];
       }
+    }
 
-      return {
-        player: playerId,
-        scout:  demoUser._id,
-        matchDetails: {
-          opponent:      r.matchDetails?.opponent,
-          competition:   r.matchDetails?.competition,
-          result:        r.matchDetails?.result,
-          matchDate:     r.date ? new Date(r.date) : undefined,
-          minutesPlayed: r.matchDetails?.minutesPlayed,
-          position:      r.matchDetails?.position
-        },
-        ratings: {
-          technical: r.ratings?.technical,
-          physical:  r.ratings?.physical,
-          mental:    r.ratings?.mental,
-          tactical:  r.ratings?.tactical,
-          finishing: r.ratings?.finishing,
-          passing:   r.ratings?.passing,
-          dribbling: r.ratings?.dribbling,
-          defending: r.ratings?.defending,
-          workRate:  r.ratings?.workRate
-        },
-        overallRating:  r.overallRating,
-        strengths:      r.strengths   ?? [],
-        weaknesses:     r.weaknesses  ?? [],
-        keyMoments:     r.keyMoments  ?? [],
-        recommendation: mapRecommendation(r.recommendation),
-        notes:          r.notes
-      };
-    })
-    .filter(Boolean);
+    if (!playerId && report.playerName) {
+      const createdPlayer = await Player.create({
+        name: report.playerName,
+        position: mapPosition(report.matchDetails?.position),
+        age: 21,
+        team: 'Unknown Team',
+        nationality: 'Unknown',
+        stats: { appearances: 0, goals: 0, assists: 0, minutesPlayed: 0 }
+      });
+
+      playerId = createdPlayer._id;
+      playersByName.set(normalizedPlayerName, playerId);
+      console.warn(`⚠️  Jugador no encontrado para reporte: "${report.playerName}" — creado automáticamente`);
+    }
+
+    if (!playerId) {
+      console.warn(`⚠️  No se pudo resolver jugador para reporte: "${report.playerName}" — omitido`);
+      continue;
+    }
+
+    reportDocs.push({
+      player: playerId,
+      scout: demoUser._id,
+      matchDetails: {
+        opponent: report.matchDetails?.opponent,
+        competition: report.matchDetails?.competition,
+        result: report.matchDetails?.result,
+        matchDate: report.date ? new Date(report.date) : undefined,
+        minutesPlayed: report.matchDetails?.minutesPlayed,
+        position: report.matchDetails?.position
+      },
+      ratings: {
+        technical: report.ratings?.technical,
+        physical: report.ratings?.physical,
+        mental: report.ratings?.mental,
+        tactical: report.ratings?.tactical,
+        finishing: report.ratings?.finishing,
+        passing: report.ratings?.passing,
+        dribbling: report.ratings?.dribbling,
+        defending: report.ratings?.defending,
+        workRate: report.ratings?.workRate
+      },
+      overallRating: report.overallRating,
+      strengths: report.strengths ?? [],
+      weaknesses: report.weaknesses ?? [],
+      keyMoments: report.keyMoments ?? [],
+      recommendation: mapRecommendation(report.recommendation),
+      notes: report.notes
+    });
+  }
 
   if (reportDocs.length > 0) {
     await ScoutReport.insertMany(reportDocs);
