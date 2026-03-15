@@ -105,6 +105,23 @@ function normalizeName(value) {
     .trim();
 }
 
+function toDate(value) {
+  return value ? new Date(value) : undefined;
+}
+
+function mapGame(game) {
+  return {
+    matchId: game?.matchId,
+    date: toDate(game?.date),
+    opponent: game?.opponent,
+    result: game?.result,
+    goals: game?.goals,
+    assists: game?.assists,
+    rating: game?.rating,
+    minutesPlayed: game?.minutesPlayed
+  };
+}
+
 function mapDetailedProfile(rawKey, item, playerId) {
   if (!item || !item.basicInfo) return null;
 
@@ -113,18 +130,50 @@ function mapDetailedProfile(rawKey, item, playerId) {
     sourceKey: rawKey,
     basicInfo: {
       playerId: item.basicInfo.playerId,
+      name: item.basicInfo.name,
       fullName: item.basicInfo.fullName,
       displayName: item.basicInfo.displayName,
+      nationality: item.basicInfo.nationality,
       secondNationality: item.basicInfo.secondNationality,
       placeOfBirth: item.basicInfo.placeOfBirth,
-      dateOfBirth: item.basicInfo.dateOfBirth ? new Date(item.basicInfo.dateOfBirth) : undefined
+      dateOfBirth: toDate(item.basicInfo.dateOfBirth),
+      age: item.basicInfo.age,
+      height: item.basicInfo.height,
+      weight: item.basicInfo.weight,
+      preferredFoot: item.basicInfo.preferredFoot,
+      profileImage: item.basicInfo.profileImage
+    },
+    dataProvider: item.dataProvider,
+    dataSource: item.dataSource,
+    season: item.season,
+    version: item.version,
+    lastUpdated: toDate(item.lastUpdated),
+    lastVerified: toDate(item.lastVerified),
+    updateFrequency: item.updateFrequency,
+    reliability: item.reliability,
+    completeness: item.completeness,
+    clubInfo: {
+      currentTeam: item.clubInfo?.currentTeam,
+      teamId: item.clubInfo?.teamId,
+      league: item.clubInfo?.league,
+      leagueId: item.clubInfo?.leagueId,
+      division: item.clubInfo?.division,
+      country: item.clubInfo?.country,
+      jerseyNumber: item.clubInfo?.jerseyNumber,
+      position: item.clubInfo?.position,
+      secondaryPositions: item.clubInfo?.secondaryPositions || [],
+      joinedDate: toDate(item.clubInfo?.joinedDate),
+      playerStatus: item.clubInfo?.playerStatus,
+      isLoanPlayer: item.clubInfo?.isLoanPlayer,
+      loanDetails: item.clubInfo?.loanDetails ?? undefined
     },
     marketData: {
       currentMarketValue: item.marketData?.currentMarketValue ?? undefined,
       currency: item.marketData?.currency,
-      valuationDate: item.marketData?.valuationDate ? new Date(item.marketData.valuationDate) : undefined,
+      valuationDate: toDate(item.marketData?.valuationDate),
+      transferData: item.marketData?.transferData ?? undefined,
       valueHistory: (item.marketData?.valueHistory || []).map((entry) => ({
-        date: entry.date ? new Date(entry.date) : undefined,
+        date: toDate(entry.date),
         value: entry.value,
         source: entry.source
       })),
@@ -134,24 +183,59 @@ function mapDetailedProfile(rawKey, item, playerId) {
         last12Months: item.marketData?.valueTrend?.last12Months
       }
     },
+    contractInfo: {
+      contractStart: toDate(item.contractInfo?.contractStart),
+      contractEnd: toDate(item.contractInfo?.contractEnd),
+      contractLength: item.contractInfo?.contractLength,
+      releaseClause: item.contractInfo?.releaseClause,
+      salary: {
+        weeklyWage: item.contractInfo?.salary?.weeklyWage,
+        annualSalary: item.contractInfo?.salary?.annualSalary,
+        currency: item.contractInfo?.salary?.currency,
+        bonuses: item.contractInfo?.salary?.bonuses ?? undefined
+      },
+      agentInfo: {
+        agentName: item.contractInfo?.agentInfo?.agentName,
+        agencyName: item.contractInfo?.agentInfo?.agencyName,
+        agentFeePercentage: item.contractInfo?.agentInfo?.agentFeePercentage
+      }
+    },
+    seasonStats: item.seasonStats
+      ? {
+          ...item.seasonStats,
+          goalkeepingStats: item.seasonStats.goalkeepingStats ?? undefined
+        }
+      : undefined,
     formAnalysis: {
       currentForm: {
         formRating: item.formAnalysis?.currentForm?.formRating,
         consistencyScore: item.formAnalysis?.currentForm?.consistencyScore,
         momentumIndicator: item.formAnalysis?.currentForm?.momentumIndicator,
-        last5Games: (item.formAnalysis?.currentForm?.last5Games || []).map((game) => ({
-          matchId: game.matchId,
-          date: game.date ? new Date(game.date) : undefined,
-          opponent: game.opponent,
-          result: game.result,
-          goals: game.goals,
-          assists: game.assists,
-          rating: game.rating,
-          minutesPlayed: game.minutesPlayed
-        }))
+        last5Games: (item.formAnalysis?.currentForm?.last5Games || []).map(mapGame),
+        last10Games: (item.formAnalysis?.currentForm?.last10Games || []).map(mapGame)
+      },
+      seasonProgression: (item.formAnalysis?.seasonProgression || []).map((entry) => ({
+        month: entry.month,
+        goals: entry.goals,
+        assists: entry.assists,
+        appearances: entry.appearances,
+        averageRating: entry.averageRating
+      })),
+      streaks: {
+        currentGoalStreak: item.formAnalysis?.streaks?.currentGoalStreak,
+        longestGoalStreak: item.formAnalysis?.streaks?.longestGoalStreak,
+        currentAssistStreak: item.formAnalysis?.streaks?.currentAssistStreak,
+        longestAssistStreak: item.formAnalysis?.streaks?.longestAssistStreak,
+        currentCleanSheetStreak: item.formAnalysis?.streaks?.currentCleanSheetStreak
       }
     },
     injuryHistory: {
+      currentInjuries: item.injuryHistory?.currentInjuries || [],
+      injuryHistory: (item.injuryHistory?.injuryHistory || []).map((entry) => ({
+        ...entry,
+        injuryDate: toDate(entry.injuryDate),
+        returnDate: toDate(entry.returnDate)
+      })),
       injuryProneness: item.injuryHistory?.injuryProneness,
       totalDaysInjured: item.injuryHistory?.totalDaysInjured,
       availabilityPercentage: item.injuryHistory?.availabilityPercentage
@@ -160,17 +244,55 @@ function mapDetailedProfile(rawKey, item, playerId) {
       overallRating: item.scoutingNotes?.overallRating,
       potential: item.scoutingNotes?.potential,
       readiness: item.scoutingNotes?.readiness,
-      comparablePlayer: item.scoutingNotes?.comparablePlayer
+      comparablePlayer: item.scoutingNotes?.comparablePlayer,
+      ceiling: item.scoutingNotes?.ceiling,
+      attributes: item.scoutingNotes?.attributes ?? undefined,
+      scoutComments: (item.scoutingNotes?.scoutComments || []).map((comment) => ({
+        ...comment,
+        date: toDate(comment.date)
+      }))
     },
     socialMedia: {
-      marketability: item.socialMedia?.marketability
+      marketability: item.socialMedia?.marketability,
+      engagementRate: item.socialMedia?.engagementRate,
+      followersCount: {
+        instagram: item.socialMedia?.followersCount?.instagram,
+        twitter: item.socialMedia?.followersCount?.twitter,
+        facebook: item.socialMedia?.followersCount?.facebook,
+        tiktok: item.socialMedia?.followersCount?.tiktok
+      }
     },
     miscellaneous: {
+      languages: item.miscellaneous?.languages || [],
+      education: item.miscellaneous?.education,
+      family: item.miscellaneous?.family ?? undefined,
+      personalityTraits: item.miscellaneous?.personalityTraits || [],
       leadership: item.miscellaneous?.leadership,
       professionalism: item.miscellaneous?.professionalism,
       adaptability: item.miscellaneous?.adaptability
     },
+    careerHistory: {
+      previousClubs: (item.careerHistory?.previousClubs || []).map((club) => ({
+        ...club,
+        startDate: toDate(club.startDate),
+        endDate: toDate(club.endDate)
+      })),
+      youthCareer: item.careerHistory?.youthCareer || []
+    },
+    competitionBreakdown: item.competitionBreakdown ?? undefined,
+    internationalCareer: {
+      nationalTeam: item.internationalCareer?.nationalTeam,
+      youthTeams: item.internationalCareer?.youthTeams || [],
+      caps: item.internationalCareer?.caps,
+      goals: item.internationalCareer?.goals,
+      assists: item.internationalCareer?.assists,
+      debut: toDate(item.internationalCareer?.debut),
+      lastCallUp: toDate(item.internationalCareer?.lastCallUp),
+      majorTournaments: item.internationalCareer?.majorTournaments || []
+    },
     tacticalData: {
+      positionData: item.tacticalData?.positionData ?? undefined,
+      heatmaps: item.tacticalData?.heatmaps ?? undefined,
       playingStyle: {
         styleDescription: item.tacticalData?.playingStyle?.styleDescription,
         strengths: item.tacticalData?.playingStyle?.strengths || [],

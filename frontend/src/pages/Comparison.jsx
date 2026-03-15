@@ -8,8 +8,6 @@ import {
   Legend,
   ResponsiveContainer,
   Tooltip,
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
@@ -30,45 +28,162 @@ function toDateKey(value) {
   return date.toISOString().slice(0, 10);
 }
 
+function toMonthKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function formatDateLabel(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('es-ES', { month: '2-digit', year: '2-digit' });
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit'
+  });
 }
 
-function buildPerformanceSeries(players) {
-  const pointsByDate = new Map();
+function formatMonthLabel(value) {
+  const [year, month] = String(value).split('-');
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('es-ES', {
+    month: 'short',
+    year: '2-digit'
+  });
+}
 
-  players.forEach((player) => {
-    const name = player.name;
-    const games = Array.isArray(player?.detailedProfile?.formAnalysis?.currentForm?.last5Games)
-      ? [...player.detailedProfile.formAnalysis.currentForm.last5Games]
-      : [];
+function buildRealMetricSeries(players, metrics) {
+  return metrics.map((metric) => {
+    const point = { metric: metric.label };
 
-    if (games.length > 0) {
-      games
-        .filter((game) => game?.date)
-        .sort((a, b) => new Date(a.date) - new Date(b.date))
-        .forEach((game) => {
-          const key = toDateKey(game.date);
-          if (!key) return;
+    players.forEach((player) => {
+      const rawValue = Number(metric.getter(player));
+      const value = Number.isFinite(rawValue) ? rawValue : null;
+      point[player.name] = value;
+      point[`${player.name}__raw`] = value;
+    });
 
-          const prev = pointsByDate.get(key) || { period: formatDateLabel(key), timestamp: key };
-          prev[`${name}__goals`] = Number(game.goals ?? 0);
-          prev[`${name}__assists`] = Number(game.assists ?? 0);
-          pointsByDate.set(key, prev);
-        });
-      return;
+    return point;
+  });
+}
+
+const OFFENSIVE_METRICS = [
+  {
+    key: 'goals',
+    label: 'Goles',
+    getter: (player) => player?.stats?.goals ?? 0,
+    format: (value) => String(Math.round(value))
+  },
+  {
+    key: 'xg',
+    label: 'xG',
+    getter: (player) => player?.detailedProfile?.seasonStats?.advancedStats?.expectedStats?.xG,
+    format: (value) => value.toFixed(2)
+  },
+  {
+    key: 'assists',
+    label: 'Asistencias',
+    getter: (player) => player?.stats?.assists ?? 0,
+    format: (value) => String(Math.round(value))
+  },
+  {
+    key: 'xa',
+    label: 'xA',
+    getter: (player) => player?.detailedProfile?.seasonStats?.advancedStats?.expectedStats?.xA,
+    format: (value) => value.toFixed(2)
+  },
+  {
+    key: 'shotAccuracy',
+    label: 'Precisión tiro %',
+    getter: (player) => player?.detailedProfile?.seasonStats?.advancedStats?.shootingMetrics?.shotAccuracy,
+    format: (value) => `${value.toFixed(1)}%`
+  },
+  {
+    key: 'shotConversion',
+    label: 'Conversión %',
+    getter: (player) => player?.detailedProfile?.seasonStats?.advancedStats?.shootingMetrics?.shotConversion,
+    format: (value) => `${value.toFixed(1)}%`
+  },
+  {
+    key: 'keyPassesP90',
+    label: 'Pases clave p90',
+    getter: (player) => player?.detailedProfile?.seasonStats?.per90Stats?.keyPassesP90,
+    format: (value) => value.toFixed(2)
+  },
+  {
+    key: 'dribblesP90',
+    label: 'Regates p90',
+    getter: (player) => player?.detailedProfile?.seasonStats?.per90Stats?.dribblesP90,
+    format: (value) => value.toFixed(2)
+  }
+];
+
+const PHYSICAL_TACTICAL_METRICS = [
+  {
+    key: 'passesP90',
+    label: 'Pases p90',
+    getter: (player) => player?.detailedProfile?.seasonStats?.per90Stats?.passesP90,
+    format: (value) => value.toFixed(1)
+  },
+  {
+    key: 'tacklesP90',
+    label: 'Entradas p90',
+    getter: (player) => player?.detailedProfile?.seasonStats?.per90Stats?.tacklesP90,
+    format: (value) => value.toFixed(2)
+  },
+  {
+    key: 'interceptionsP90',
+    label: 'Intercepciones p90',
+    getter: (player) => player?.detailedProfile?.seasonStats?.per90Stats?.interceptionsP90,
+    format: (value) => value.toFixed(2)
+  },
+  {
+    key: 'recoveries',
+    label: 'Recuperaciones',
+    getter: (player) => player?.detailedProfile?.seasonStats?.advancedStats?.defensiveMetrics?.recoveries,
+    format: (value) => String(Math.round(value))
+  },
+  {
+    key: 'pressures',
+    label: 'Presiones',
+    getter: (player) => player?.detailedProfile?.seasonStats?.advancedStats?.defensiveMetrics?.pressures,
+    format: (value) => String(Math.round(value))
+  },
+  {
+    key: 'distanceCoveredP90',
+    label: 'Distancia p90',
+    getter: (player) => player?.detailedProfile?.seasonStats?.physicalMetrics?.distanceCoveredP90,
+    format: (value) => `${value.toFixed(2)} km`
+  },
+  {
+    key: 'topSpeed',
+    label: 'Velocidad punta',
+    getter: (player) => player?.detailedProfile?.seasonStats?.physicalMetrics?.topSpeed,
+    format: (value) => `${value.toFixed(1)} km/h`
+  },
+  {
+    key: 'aerialDuelSuccess',
+    label: 'Duelo aéreo %',
+    getter: (player) => player?.detailedProfile?.seasonStats?.advancedStats?.defensiveMetrics?.aerialDuelSuccess,
+    format: (value) => `${value.toFixed(1)}%`
+  }
+];
+
+function metricFormatterFactory(metrics) {
+  const byLabel = new Map(metrics.map((metric) => [metric.label, metric]));
+  return (value, name, entry) => {
+    const rawValue = entry?.payload?.[`${name}__raw`];
+    const metric = byLabel.get(entry?.payload?.metric);
+
+    if (!Number.isFinite(rawValue)) {
+      return ['Sin datos', name];
     }
 
-    const fallbackKey = 'actual';
-    const prev = pointsByDate.get(fallbackKey) || { period: 'Actual', timestamp: fallbackKey };
-    prev[`${name}__goals`] = Number(player?.stats?.goals ?? 0);
-    prev[`${name}__assists`] = Number(player?.stats?.assists ?? 0);
-    pointsByDate.set(fallbackKey, prev);
-  });
-
-  return Array.from(pointsByDate.values()).sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+    const formattedRaw = metric?.format ? metric.format(rawValue) : rawValue;
+    return [`Valor real: ${formattedRaw}`, name];
+  };
 }
 
 function buildMarketValueSeries(players) {
@@ -83,13 +198,21 @@ function buildMarketValueSeries(players) {
     const trend12m = Number(marketData.valueTrend?.last12Months ?? marketData.valueTrend?.trend12m);
 
     if (history.length > 0) {
+      const latestEntryByMonth = new Map();
+
       history
         .filter((entry) => entry?.date)
         .sort((a, b) => new Date(a.date) - new Date(b.date))
         .forEach((entry) => {
-          const key = toDateKey(entry.date);
+          const key = toMonthKey(entry.date);
           if (!key) return;
-          const prev = pointsByDate.get(key) || { period: formatDateLabel(key), timestamp: key };
+          latestEntryByMonth.set(key, entry);
+        });
+
+      Array.from(latestEntryByMonth.entries())
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+        .forEach(([key, entry]) => {
+          const prev = pointsByDate.get(key) || { period: formatMonthLabel(key), timestamp: key };
           prev[name] = Number(entry.value ?? 0);
           pointsByDate.set(key, prev);
         });
@@ -123,8 +246,8 @@ function buildMarketValueSeries(players) {
     }
 
     if (currentMarketValue > 0) {
-      const valuationKey = toDateKey(marketData.valuationDate || new Date()) || 'actual';
-      const prev = pointsByDate.get(valuationKey) || { period: formatDateLabel(valuationKey), timestamp: valuationKey };
+      const valuationKey = toMonthKey(marketData.valuationDate || new Date()) || 'actual';
+      const prev = pointsByDate.get(valuationKey) || { period: formatMonthLabel(valuationKey), timestamp: valuationKey };
       prev[name] = currentMarketValue;
       pointsByDate.set(valuationKey, prev);
     }
@@ -226,7 +349,19 @@ export default function Comparison() {
     ];
   }, []);
 
-  const performanceSeries = useMemo(() => buildPerformanceSeries(players), [players]);
+  const offensiveSeries = useMemo(() => buildRealMetricSeries(players, OFFENSIVE_METRICS), [players]);
+  const physicalTacticalSeries = useMemo(
+    () => buildRealMetricSeries(players, PHYSICAL_TACTICAL_METRICS),
+    [players]
+  );
+  const offensiveTooltipFormatter = useMemo(
+    () => metricFormatterFactory(OFFENSIVE_METRICS),
+    []
+  );
+  const physicalTooltipFormatter = useMemo(
+    () => metricFormatterFactory(PHYSICAL_TACTICAL_METRICS),
+    []
+  );
   const marketValueSeries = useMemo(() => buildMarketValueSeries(players), [players]);
 
   const removePlayer = (id) => {
@@ -423,47 +558,61 @@ export default function Comparison() {
             </div>
 
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-bold text-secondary-900 mb-4">Tendencia de goles</h2>
+              <h2 className="text-lg font-bold text-secondary-900 mb-2">Comparativa ofensiva avanzada</h2>
+              <p className="text-xs text-gray-500 mb-3">
+                Comparativa en valor real: goles, xG, asistencias, xA, precisión y producción ofensiva por 90'.
+              </p>
               <div className="h-64 md:h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={performanceSeries} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                  <LineChart data={offensiveSeries} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="period" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
+                    <XAxis dataKey="metric" />
+                    <YAxis />
+                    <Tooltip formatter={offensiveTooltipFormatter} />
                     <Legend />
                     {players.map((player, index) => (
-                      <Bar
-                        key={`${player._id}-goals`}
-                        dataKey={`${player.name}__goals`}
-                        name={`${player.name} · Goles`}
-                        fill={COLORS[index % COLORS.length]}
+                      <Line
+                        key={`${player._id}-offense`}
+                        type="monotone"
+                        dataKey={player.name}
+                        name={player.name}
+                        stroke={COLORS[index % COLORS.length]}
+                        strokeWidth={2}
+                        connectNulls
+                        dot={{ r: 3 }}
                       />
                     ))}
-                  </BarChart>
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-bold text-secondary-900 mb-4">Tendencia de asistencias</h2>
+              <h2 className="text-lg font-bold text-secondary-900 mb-2">Comparativa físico-táctica avanzada</h2>
+              <p className="text-xs text-gray-500 mb-3">
+                Comparativa en valor real: pases p90, entradas/intercepciones, presiones, recuperaciones, distancia y velocidad.
+              </p>
               <div className="h-64 md:h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={performanceSeries} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                  <LineChart data={physicalTacticalSeries} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="period" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
+                    <XAxis dataKey="metric" />
+                    <YAxis />
+                    <Tooltip formatter={physicalTooltipFormatter} />
                     <Legend />
                     {players.map((player, index) => (
-                      <Bar
-                        key={`${player._id}-assists`}
-                        dataKey={`${player.name}__assists`}
-                        name={`${player.name} · Asist.`}
-                        fill={COLORS[index % COLORS.length]}
+                      <Line
+                        key={`${player._id}-physical`}
+                        type="monotone"
+                        dataKey={player.name}
+                        name={player.name}
+                        stroke={COLORS[index % COLORS.length]}
+                        strokeWidth={2}
+                        connectNulls
+                        dot={{ r: 3 }}
                       />
                     ))}
-                  </BarChart>
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -486,6 +635,7 @@ export default function Comparison() {
                         name={player.name}
                         stroke={COLORS[index % COLORS.length]}
                         strokeWidth={2}
+                        connectNulls
                         dot={{ r: 3 }}
                       />
                     ))}

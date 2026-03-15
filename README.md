@@ -1,9 +1,9 @@
 # ASE Athletics - Plataforma de Análisis de Fútbol
 
 ## Demostración en Vivo
-- **Aplicación Frontend:** [Tu URL de frontend desplegado]
-- **API Backend:** [Tu URL de backend desplegado]
-- **Documentación de API:** [Swagger UI o URL de documentación]
+- **Aplicación Frontend:** [\[frontend desplegado\]](https://ase-z6lq.onrender.com/)
+- **API Backend:** [\[backend desplegado\]](https://ase-backend-jyib.onrender.com/api/)
+- **Documentación de API:** [\[Swagger UI\]](https://ase-backend-jyib.onrender.com/api/docs/)
 
 
 ## Resumen del Proyecto
