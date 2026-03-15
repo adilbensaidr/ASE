@@ -131,45 +131,6 @@ function ContactInfoCard({ data }) {
   );
 }
 
-function MetadataCard({ data }) {
-  if (!data || typeof data !== 'object') return null;
-
-  const hasMeta = data.sourceKey || data.season || data.dataProvider || data.lastUpdated || data.reliability != null || data.completeness != null;
-  if (!hasMeta) return null;
-
-  return (
-    <div className={detailCardClass}>
-      <h3 className="text-base font-bold text-gray-900">Calidad y origen del dato</h3>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <div>
-          <p className="text-xs text-gray-600 font-medium">Fuente</p>
-          <p className="font-semibold text-gray-900">{data.dataProvider || data.dataSource || 'N/A'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-600 font-medium">Temporada</p>
-          <p className="font-semibold text-gray-900">{data.season || 'N/A'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-600 font-medium">Clave</p>
-          <p className="font-semibold text-gray-900">{data.sourceKey || 'N/A'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-600 font-medium">Última actualización</p>
-          <p className="font-semibold text-gray-900">{formatDate(data.lastUpdated)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-600 font-medium">Fiabilidad</p>
-          <p className="font-semibold text-gray-900">{data.reliability != null ? `${data.reliability}` : 'N/A'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-600 font-medium">Completitud</p>
-          <p className="font-semibold text-gray-900">{data.completeness != null ? `${data.completeness}` : 'N/A'}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ClubInfoCard({ data }) {
   if (!data || typeof data !== 'object') return null;
 
@@ -1320,7 +1281,6 @@ export default function PlayerDetail() {
         {detailed && (
           <div className="flex flex-wrap gap-3 items-start">
             <div className="w-full md:w-[calc(50%-0.375rem)]"><BasicInfoCard data={detailed.basicInfo} /></div>
-            <div className="w-full md:w-[calc(50%-0.375rem)]"><MetadataCard data={detailed} /></div>
             <div className="w-full md:w-[calc(50%-0.375rem)]"><ClubInfoCard data={detailed.clubInfo} /></div>
             <div className="w-full md:w-[calc(50%-0.375rem)]"><ContactInfoCard data={detailed.contactInfo} /></div>
             <div className="w-full md:w-[calc(50%-0.375rem)]"><ContractInfoCard data={detailed.contractInfo || player.contract} /></div>
